@@ -50,6 +50,46 @@ export type PluginInit = (context: PluginContext) => void | Promise<void>;
 
 // ── Manifest ──
 
+export interface PluginRoute {
+  path: string;
+  title: string;
+  type: 'table' | 'form' | 'custom' | 'dashboard';
+  icon?: string;
+  config?: any;
+}
+
+/** @deprecated Usa `modules` o `subTabs` en `ui`. Se mantiene por compatibilidad. */
+export interface PluginMenuItem {
+  label: string;
+  path: string;
+  icon: string;
+}
+
+/**
+ * Sub-tab inyectada dentro de un módulo del navbar (core o de otro plugin).
+ * Aparece como pestaña horizontal en la topbar cuando el módulo está activo.
+ */
+export interface PluginSubTab {
+  /** ID del módulo donde inyectar (core: home, inventory, sales, purchases, accounting, plugins, settings, o el id de un módulo de otro plugin). */
+  moduleId: string;
+  label: string;
+  path: string;
+  /** Nombre de un icono de lucide-react. Opcional. */
+  icon?: string;
+}
+
+/**
+ * Módulo top-level registrado por un plugin. Aparece como icono nuevo en el sidebar.
+ */
+export interface PluginModule {
+  id: string;
+  label: string;
+  /** Nombre de un icono de lucide-react (ej: "Tag", "Briefcase"). */
+  icon: string;
+  /** Sub-tabs propios de este módulo. */
+  subTabs?: Array<Omit<PluginSubTab, 'moduleId'>>;
+}
+
 export interface PluginManifest {
   name: string;
   version: string;
@@ -57,18 +97,13 @@ export interface PluginManifest {
   author?: string;
   logo?: string;
   ui?: {
-    routes?: Array<{
-      path: string;
-      title: string;
-      type: 'table' | 'form' | 'custom' | 'dashboard';
-      icon?: string;
-      config?: any;
-    }>;
-    menuItems?: Array<{
-      label: string;
-      path: string;
-      icon: string;
-    }>;
+    routes?: PluginRoute[];
+    /** @deprecated Usa `modules` o `subTabs`. */
+    menuItems?: PluginMenuItem[];
+    /** Módulos top-level (icono nuevo en el sidebar). */
+    modules?: PluginModule[];
+    /** Sub-tabs inyectados en módulos existentes. */
+    subTabs?: PluginSubTab[];
   };
 }
 
@@ -89,7 +124,19 @@ export type DocumentType =
   | 'salesOrder' | 'purchaseOrder'
   | 'salesDeliveryNote' | 'purchaseDeliveryNote';
 
-export type HookEvent = `${DocumentType}.${'beforeCreate' | 'afterCreate'}`;
+export type HookEvent =
+  | `${DocumentType}.${'beforeCreate' | 'afterCreate'}`
+  | `${'items' | 'partners'}.list.afterFetch`;
+
+/**
+ * Contexto que reciben los handlers de `<entity>.list.afterFetch`.
+ * El plugin puede mutar `rows` o devolver un array nuevo.
+ */
+export interface ListFetchContext<T = any> extends HookContext {
+  entity: 'items' | 'partners' | string;
+  filters: Record<string, any>;
+  rows: T[];
+}
 
 // ── UI Components (tipos para IntelliSense) ──
 
