@@ -350,7 +350,10 @@ export type HookEvent =
   | `journalEntry.${'posted' | 'reversed'}`
   | `payroll.approved`
   | `period.${'closed' | 'opened'}`
-  | `payment.${'created' | 'deleted'}`;
+  | `payment.${'created' | 'deleted'}`
+  | `shipment.${'created' | 'packed' | 'dispatched' | 'delivered' | 'received' | 'exception'}`
+  | `picking.${'started' | 'taskUpdated' | 'completed'}`
+  | `route.${'started' | 'completed' | 'stopVisited'}`;
 
 /**
  * Contexto que reciben los handlers de `<entity>.list.afterFetch`.
