@@ -43,7 +43,221 @@ export interface PluginContext {
     onBeforeCreate: (tableName: string, handler: HookHandler) => void;
     onAfterCreate: (tableName: string, handler: HookHandler) => void;
   };
-  factuApi: any;
+  factuApi: FactuApi;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// FactuApi — superficie completa expuesta a plugins
+// ─────────────────────────────────────────────────────────────────
+
+/** Tipo de documento de negocio. */
+export type DocType = 'SINV' | 'PINV' | 'SO' | 'PO' | 'SDN' | 'PDN';
+
+/** Origen de un asiento contable. */
+export type JournalSource =
+  | 'manual'
+  | 'sales_invoice'
+  | 'purchase_invoice'
+  | 'payment'
+  | 'payroll'
+  | 'period_close'
+  | 'period_open'
+  | 'reversal';
+
+export interface JournalLineInput {
+  accountId: string;
+  debit?: number | string;
+  credit?: number | string;
+  description?: string | null;
+  costCenterId?: string | null;
+  profitCenterId?: string | null;
+  internalOrderId?: string | null;
+  partnerId?: string | null;
+  taxId?: string | null;
+  currency?: string;
+  exchangeRate?: number | string;
+}
+
+export interface JournalEntry {
+  id: string;
+  date: Date | string;
+  periodId: string;
+  description: string | null;
+  source: JournalSource;
+  sourceDocumentId: string | null;
+  addLine(line: JournalLineInput): JournalEntry;
+  readonly lines: readonly JournalLineInput[];
+  save(db: any, userId?: string | null): Promise<{ id: string }>;
+}
+
+export interface DiLine {
+  itemId: string;
+  quantity: number;
+  price: number;
+  taxGroupId: string;
+  warehouseId?: string;
+  zoneId?: string;
+  uomId?: string;
+  uomFactor?: number;
+  batchDetails?: Array<{
+    batchNum: string;
+    quantity: number;
+    expiryDate?: Date;
+    zoneId?: string;
+  }>;
+  pluginData?: Record<string, any>;
+  costCenterId?: string | null;
+  profitCenterId?: string | null;
+  internalOrderId?: string | null;
+  [key: string]: any;
+}
+
+export interface DiDocument {
+  readonly id: string;
+  readonly docType: DocType;
+  partnerId: string;
+  seriesId: string;
+  periodId: string;
+  date: Date | string;
+  warehouseId?: string;
+  billToAddress?: string;
+  shipToAddress?: string;
+  deliveryDate?: Date | string;
+  orderId?: string;
+  customFields: Record<string, any>;
+  addLine(line: DiLine): DiDocument;
+  readonly lines: readonly DiLine[];
+  save(tenantId: string, db: any, user: any): Promise<{ id: string; docNum: number }>;
+}
+
+export interface PeriodClosePreview {
+  period: any;
+  blockers: string[];
+  regularizationLines: JournalLineInput[];
+  resultAmount: number;
+  nextPeriodCode: string;
+  nextPeriodStart: string;
+  nextPeriodEnd: string;
+  openingLines: JournalLineInput[];
+}
+
+export interface FactuApiTransaction {
+  readonly tenantId: string;
+  readonly db: any;
+  readonly user: any;
+
+  // ── Factory de documentos ──
+  salesInvoice(): DiDocument;
+  purchaseInvoice(): DiDocument;
+  salesOrder(): DiDocument;
+  purchaseOrder(): DiDocument;
+  salesDeliveryNote(): DiDocument;
+  purchaseDeliveryNote(): DiDocument;
+  create(docType: DocType): DiDocument;
+  save(doc: DiDocument): Promise<{ id: string; docNum: number }>;
+
+  // ── Consultas de maestros ──
+  getPartner(idOrCode: string): Promise<any | null>;
+  getPartners(): Promise<any[]>;
+  getItem(idOrCode: string): Promise<any | null>;
+  getItems(): Promise<any[]>;
+  getCategories(): Promise<any[]>;
+  getWarehouses(): Promise<any[]>;
+  getSeries(docType?: string): Promise<any[]>;
+  getTaxGroups(): Promise<any[]>;
+  getCurrencies(): Promise<any[]>;
+  getPaymentMethods(): Promise<any[]>;
+  getPaymentTerms(): Promise<any[]>;
+  getDocumentTypes(): Promise<any[]>;
+  getOpenPeriods(): Promise<any[]>;
+  getPeriods(): Promise<any[]>;
+
+  // ── Plan contable / analítica ──
+  getChartOfAccounts(): Promise<any[]>;
+  getAccount(idOrCode: string): Promise<any | null>;
+  getCostCenter(idOrCode: string): Promise<any | null>;
+  getProfitCenter(idOrCode: string): Promise<any | null>;
+  getInternalOrder(idOrCode: string): Promise<any | null>;
+  getDimensionRule(accountId: string): Promise<any | null>;
+
+  // ── Asientos contables ──
+  journalEntry(): JournalEntry;
+  postJournalEntry(entryId: string): Promise<void>;
+  reverseJournalEntry(entryId: string, description?: string): Promise<{ reversalId: string }>;
+  resolveAccount(kind: string, key?: string | null): Promise<string | null>;
+  createEntryFromSalesInvoice(invoice: any, lines?: any[]): Promise<{ id: string } | null>;
+  createEntryFromPurchaseInvoice(invoice: any, lines?: any[]): Promise<{ id: string } | null>;
+  createEntryFromPayment(
+    payment: any,
+    invoice: { id: string; partnerId: string; periodId: string; docNum?: number },
+    direction: 'sales' | 'purchase',
+  ): Promise<{ id: string } | null>;
+
+  // ── Cierre de período ──
+  previewPeriodClose(periodId: string): Promise<PeriodClosePreview>;
+  closePeriod(periodId: string): Promise<{
+    regularizationEntryId: string | null;
+    nextPeriodId: string;
+    openingEntryId: string | null;
+  }>;
+
+  // ── RRHH ──
+  getEmployees(): Promise<any[]>;
+  getEmployee(idOrCode: string): Promise<any | null>;
+  getDepartment(idOrCode: string): Promise<any | null>;
+  approvePayroll(payrollId: string, periodId?: string): Promise<{ id: string } | null>;
+
+  // ── Pagos ──
+  registerPayment(opts: {
+    invoiceId: string;
+    direction: 'sales' | 'purchase';
+    amount: number;
+    date?: Date | string;
+    reference: string;
+    paymentMethodId?: string | null;
+    notes?: string | null;
+  }): Promise<{ id: string; journalEntryId: string | null }>;
+}
+
+export interface FactuApi {
+  create(docType: DocType): DiDocument;
+  salesInvoice(): DiDocument;
+  purchaseInvoice(): DiDocument;
+  salesOrder(): DiDocument;
+  purchaseOrder(): DiDocument;
+  salesDeliveryNote(): DiDocument;
+  purchaseDeliveryNote(): DiDocument;
+  /** Ejecuta un callback en una transacción atómica. */
+  transaction<T>(
+    tenantId: string,
+    db: any,
+    user: any,
+    fn: (tx: FactuApiTransaction) => Promise<T>,
+  ): Promise<T>;
+  /** Acceso sin transacción explícita. */
+  connect(tenantId: string, db: any, user: any): FactuApiTransaction;
+  getTenants(): Promise<any[]>;
+  getTenant(tenantId: string): Promise<any | null>;
+  getTenantByName(name: string): Promise<any | null>;
+  getTenantDb(tenantId: string): Promise<any>;
+  login(emailOrUsername: string, password: string): Promise<{
+    user: any;
+    tenants: Array<{ tenantId: string; tenantName: string; role: string; permissions: any }>;
+    token: string;
+  }>;
+  session(
+    emailOrUsername: string,
+    password: string,
+    tenantName?: string,
+  ): Promise<{
+    tenantId: string;
+    tenantName: string;
+    db: any;
+    user: any;
+    token: string;
+    api: FactuApiTransaction;
+  }>;
+  disconnect(): Promise<void>;
 }
 
 export type PluginInit = (context: PluginContext) => void | Promise<void>;
@@ -115,7 +329,13 @@ export type CoreTableName =
   | 'SalesInvoiceLine' | 'SalesOrderLine' | 'SalesDeliveryNoteLine'
   | 'PurchaseInvoiceLine' | 'PurchaseOrderLine' | 'PurchaseDeliveryNoteLine'
   | 'BusinessPartner' | 'Item' | 'Warehouse' | 'WarehouseZone'
-  | 'Category' | 'UnitOfMeasure' | 'AccountingPeriod' | 'DocumentSeries';
+  | 'Category' | 'UnitOfMeasure' | 'AccountingPeriod' | 'DocumentSeries'
+  // Contabilidad avanzada
+  | 'ChartOfAccount' | 'CostCenter' | 'ProfitCenter' | 'InternalOrder' | 'DimensionRule'
+  | 'JournalEntry' | 'JournalEntryLine' | 'AccountMapping'
+  // RRHH
+  | 'Employee' | 'Department' | 'Position' | 'Contract'
+  | 'Payroll' | 'PayrollLine' | 'Leave';
 
 // ── Hooks disponibles ──
 
@@ -125,8 +345,12 @@ export type DocumentType =
   | 'salesDeliveryNote' | 'purchaseDeliveryNote';
 
 export type HookEvent =
-  | `${DocumentType}.${'beforeCreate' | 'afterCreate'}`
-  | `${'items' | 'partners'}.list.afterFetch`;
+  | `${DocumentType}.${'beforeCreate' | 'afterCreate' | 'posted'}`
+  | `${'items' | 'partners'}.list.afterFetch`
+  | `journalEntry.${'posted' | 'reversed'}`
+  | `payroll.approved`
+  | `period.${'closed' | 'opened'}`
+  | `payment.${'created' | 'deleted'}`;
 
 /**
  * Contexto que reciben los handlers de `<entity>.list.afterFetch`.
