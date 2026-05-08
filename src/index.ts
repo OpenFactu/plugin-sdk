@@ -207,6 +207,81 @@ export interface FactuApiTransaction {
   getDepartment(idOrCode: string): Promise<any | null>;
   approvePayroll(payrollId: string, periodId?: string): Promise<{ id: string } | null>;
 
+  // ── RRHH avanzado ──
+  getContracts(opts?: { employeeId?: string; activeOnly?: boolean }): Promise<any[]>;
+  getPayrollConcepts(opts?: { activeOnly?: boolean }): Promise<any[]>;
+  getPayrolls(opts?: { employeeId?: string; year?: number; month?: number }): Promise<any[]>;
+  getPayroll(id: string): Promise<any | null>;
+  addPayrollLine(
+    payrollId: string,
+    line: {
+      conceptId?: string | null;
+      concept: string;
+      type: 'earning' | 'deduction' | 'employer_cost';
+      quantity?: number | null;
+      rate?: number | null;
+      baseAmount?: number | null;
+      amount: number;
+      accountId?: string | null;
+    },
+  ): Promise<any>;
+  getTimeclockEntries(opts?: {
+    employeeId?: string;
+    from?: Date | string;
+    to?: Date | string;
+    kind?: 'in' | 'out' | 'break_start' | 'break_end';
+  }): Promise<any[]>;
+  addTimeclockEntry(entry: {
+    employeeId: string;
+    kind: 'in' | 'out' | 'break_start' | 'break_end';
+    at?: Date | string;
+    source?: 'web' | 'kiosk' | 'admin';
+    notes?: string;
+  }): Promise<any>;
+  getShiftAssignments(opts?: { employeeId?: string; from?: string; to?: string }): Promise<any[]>;
+  getShiftTemplates(): Promise<any[]>;
+  getIncidentTypes(): Promise<any[]>;
+  getIncidents(opts?: {
+    employeeId?: string;
+    status?: 'pending' | 'approved' | 'rejected' | 'covered';
+    from?: Date | string;
+    to?: Date | string;
+  }): Promise<any[]>;
+  getCollectiveAgreements(): Promise<any[]>;
+  getEvaluations(opts?: { cycleId?: string; employeeId?: string }): Promise<any[]>;
+  getObjectives(opts?: { employeeId?: string; status?: string }): Promise<any[]>;
+  getCommissionRules(): Promise<any[]>;
+  getCommissionAccruals(opts?: {
+    employeeId?: string;
+    status?: 'pending' | 'paid' | 'cancelled';
+    year?: number;
+    month?: number;
+  }): Promise<any[]>;
+
+  // ── Tareas y Proyectos ──
+  getTasks(opts?: {
+    assigneeId?: string;
+    status?: string;
+    projectId?: string;
+  }): Promise<any[]>;
+  createTask(task: {
+    title: string;
+    description?: string;
+    status?: string;
+    priority?: string;
+    assigneeId?: string;
+    internalOrderId?: string;
+    departmentId?: string;
+    startDate?: string;
+    dueDate?: string;
+    estimatedHours?: number;
+  }): Promise<any>;
+  updateTask(id: string, patch: Record<string, any>): Promise<any>;
+  getGantt(opts?: { from?: string; to?: string; projectId?: string }): Promise<{
+    tasks: any[];
+    dependencies: any[];
+  }>;
+
   // ── Pagos ──
   registerPayment(opts: {
     invoiceId: string;
